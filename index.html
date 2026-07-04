@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Production Scanner</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, Roboto, Arial, sans-serif;
+      background: #111;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    h1 { font-size: 18px; margin-bottom: 12px; font-weight: 600; }
+    #reader { width: 100%; max-width: 420px; border-radius: 12px; overflow: hidden; }
+    #status {
+      width: 100%;
+      max-width: 420px;
+      margin-top: 16px;
+      padding: 18px;
+      border-radius: 12px;
+      text-align: center;
+      font-size: 17px;
+      font-weight: 600;
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #222;
+      transition: background 0.2s;
+    }
+    .status-success { background: #1e7e34 !important; }
+    .status-duplicate { background: #b8860b !important; }
+    .status-error { background: #a71d2a !important; }
+    .status-waiting { background: #222 !important; }
+    #lastScan { margin-top: 8px; font-size: 13px; color: #999; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>Production Scanner</h1>
+  <div id="reader"></div>
+  <div id="status" class="status-waiting">Point camera at barcode</div>
+  <div id="lastScan"></div>
+
+  <script>
+    // ====== PASTE YOUR APPS SCRIPT WEB APP URL BELOW ======
+    const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxALseoGpf_3uSQPhW7gc5_o7XPYPE9YjW2bCc99DKuznjtVxUvQaD-_e2AAE6S4B7e/exec';
+    // =======================================================
+
+    let isProcessing = false;
+
+    function onScanSuccess(decodedText) {
+      if (isProcessing) return;
+      isProcessing = true;
+
+      setStatus('waiting', 'Saving "' + decodedText + '"...');
+
+      const url = WEBAPP_URL + '?serial=' + encodeURIComponent(decodedText);
+
+      fetch(url)
+        .then(function (res) { return res.json(); })
+        .then(function (result) {
+          if (result.status === 'success') {
+            setStatus('success', '✔ Saved — ' + result.employee);
+          } else if (result.status === 'duplicate') {
+            setStatus('duplicate', '⚠ ' + result.message);
+          } else {
+            setStatus('error', '✖ ' + result.message);
+          }
+          document.getElementById('lastScan').innerText = 'Last code: ' + decodedText;
+          setTimeout(function () { isProcessing = false; }, 1800);
+        })
+        .catch(function (err) {
+          setStatus('error', '✖ Connection error, try again');
+          setTimeout(function () { isProcessing = false; }, 1500);
+        });
+    }
+
+    function setStatus(type, message) {
+      const el = document.getElementById('status');
+      el.className = 'status-' + type;
+      el.innerText = message;
+    }
+
+    function onScanFailure(error) {
+      // fires continuously while no code is in view - ignore
+    }
+
+    const html5QrCode = new Html5Qrcode('reader');
+    html5QrCode.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 250, height: 150 } },
+      onScanSuccess,
+      onScanFailure
+    ).catch(function (err) {
+      setStatus('error', 'Camera error: ' + err);
+    });
+  </script>
+</body>
+</html>
